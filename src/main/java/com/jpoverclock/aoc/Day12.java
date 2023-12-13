@@ -1,9 +1,6 @@
 package com.jpoverclock.aoc;
 
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.LinkedList;
-import java.util.List;
+import java.util.*;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -21,11 +18,18 @@ public class Day12 {
             this.groups = groups;
         }
 
-        public List<Integer> validPositionsForGroup(int startingAt, int group) {
+        public List<Integer> validPositionsForGroup(int startingAt, int groupIndex) {
             char[] values = definition.toCharArray();
-            List<Integer> validPositions = new LinkedList<>();
+            int group = groups[groupIndex];
+            List<Integer> validPositions = new ArrayList<>();
 
-            for (int i = startingAt; i <= values.length - group; i++) {
+            int remainingGroupSize = 0;
+
+            for (int i = groupIndex + 1; i < groups.length; i++) {
+                remainingGroupSize += (groups[i] + 1);
+            }
+
+            for (int i = startingAt; i <= values.length - group - remainingGroupSize; i++) {
                 boolean valid = true;
 
                 if (i == 0) {
@@ -41,7 +45,6 @@ public class Day12 {
                 } else {
                     // General case, check if first position is empty
                     if (values[i - 1] == '#') {
-                        valid = false;
                         continue;
                     }
 
@@ -53,12 +56,23 @@ public class Day12 {
                     }
 
                     if (i + group == values.length) {
-                        // End, to not cound
+                        // End, do not count
                     }
                 }
 
                 if (valid) {
-                    validPositions.add(i);
+                    // Try to see if splitting the string yields the correct group
+                    char[] definedString = definition.toCharArray();
+
+                    for (int j = i, k = 0; k < groups[groupIndex]; k++, j++) {
+                        definedString[j] = '#';
+                    }
+
+                    String[] parts = String.valueOf(definedString).substring(startingAt, i + groups[groupIndex]).replaceAll("\\?", ".").replaceAll("\\.", " ").trim().split("\\s+");
+
+                    if (parts.length == 1 && parts[0].length() == groups[groupIndex]) {
+                        validPositions.add(i);
+                    }
                 }
             }
 
@@ -90,60 +104,76 @@ public class Day12 {
             return Arrays.equals(groups, newGroup);
         }
 
-        public Long validPositions() {
-            List<List<Integer>> validPositions = new ArrayList<>();
-            char[] values = definition.toCharArray();
+        public boolean isValidPartialPositionSet(List<Integer> positions) {
+            char[] definedString = definition.toCharArray();
 
-            int previousGroup = 0;
+            for (int i = 0; i < positions.size(); i++) {
+                int startingPosition = positions.get(i);
+                int size = groups[i];
 
-            System.out.println("Definition = " + definition);
+                for (int j = startingPosition, k = 0; k < size; k++, j++) {
+                    definedString[j] = '#';
+                }
+            }
 
-            for (var group : groups) {
-                // A group can only fit on the definition if delimited by . or ? or at the edge
+            String[] parts = String.valueOf(definedString).replaceAll("\\?", ".").replaceAll("\\.", " ").trim().split("\\s+");
 
-                if (validPositions.isEmpty()) {
-                    validPositions = validPositionsForGroup(0, group).stream().map(List::of).toList();
+            for (int i = 0; i < positions.size(); i++) {
+                if (parts[i].length() != groups[i]) return false;
+            }
+
+            return true;
+        }
+
+        private String positionsToKey(List<Integer> positions) {
+            if (positions.isEmpty()) return "R";
+
+            int groupIndex = positions.size() - 1;
+            int startingAt = positions.get(groupIndex);
+
+            return "G" + groupIndex + "S" + startingAt;
+        }
+
+        public Long validPositionsDfsRecursive(List<Integer> positions, Map<String, Long> memo) {
+
+            //System.out.println(IntStream.range(0, positions.size()).mapToObj(i -> "\t").collect(Collectors.joining()) + Arrays.toString(positions.toArray()));
+
+            if (memo.containsKey(positionsToKey(positions))) return memo.get(positionsToKey(positions));
+
+            if (positions.isEmpty()) {
+                // Initial case, root
+                return validPositionsForGroup(0, 0).stream()
+                        .map(List::of)
+                        .filter(this::isValidPartialPositionSet)
+                        .mapToLong(p -> validPositionsDfsRecursive(p, memo))
+                        .sum();
+            } else if (positions.size() == groups.length) {
+                // This is a "final" set of positions
+                if (isValidPositionSet(positions)) {
+                    memo.put(positionsToKey(positions), 1L);
+                    return 1L;
                 } else {
-                    List<List<Integer>> nextValidPositions = new LinkedList<>();
+                    return 0L;
+                }
+            } else {
+                String key = positionsToKey(positions);
 
-                    for (List<Integer> positions : validPositions) {
-                        List<Integer> morePositions = validPositionsForGroup(positions.get(positions.size() - 1) + previousGroup + 1, group);
+                List<Integer> morePositions = validPositionsForGroup(positions.get(positions.size() - 1) + groups[positions.size() - 1] + 1, positions.size());
 
-                        for (var position : morePositions) {
-                            List<Integer> nextList = new LinkedList<>(positions);
-                            nextList.add(position);
-                            nextValidPositions.add(nextList);
-                        }
+                long count = 0;
+
+                for (var nextPosition : morePositions) {
+                    List<Integer> nextPositions = new ArrayList<>(positions);
+                    nextPositions.add(nextPosition);
+
+                    if (isValidPartialPositionSet(nextPositions)) {
+                        count += validPositionsDfsRecursive(nextPositions, memo);
                     }
-                    validPositions = nextValidPositions;
                 }
 
-                previousGroup = group;
+                memo.put(key, count);
+                return count;
             }
-
-            // Sanitize valid positions
-            validPositions = validPositions.stream().filter(this::isValidPositionSet).toList();
-
-            // DEBUG
-            if (DEBUG) {
-                System.out.println(definition + " " + Arrays.toString(groups));
-                for (List<Integer> positions : validPositions) {
-                    char[] debugString = definition.toCharArray();
-
-                    for (int i = 0; i < groups.length; i++) {
-                        int startingPosition = positions.get(i);
-                        int size = groups[i];
-
-                        for (int j = startingPosition, k = 0; k < size; k++, j++) {
-                            debugString[j] = '#';
-                        }
-                    }
-
-                    System.out.println("\t" + String.copyValueOf(debugString).replaceAll("\\?", "."));
-                }
-            }
-
-            return (long) validPositions.size();
         }
 
 
@@ -171,7 +201,7 @@ public class Day12 {
         String[] lines = input.split("\n");
         long sum = Arrays.stream(lines)
                 .map(Spring::valueOf)
-                .mapToLong(Spring::validPositions)
+                .mapToLong(spring -> spring.validPositionsDfsRecursive(List.of(), new HashMap<>()))
                 .sum();
 
         return Long.toString(sum);
@@ -181,7 +211,7 @@ public class Day12 {
         String[] lines = input.split("\n");
         long sum = Arrays.stream(lines)
                 .map(Spring::valueOfUnfolded)
-                .mapToLong(Spring::validPositions)
+                .mapToLong(spring -> spring.validPositionsDfsRecursive(List.of(), new HashMap<>()))
                 .sum();
 
         return Long.toString(sum);
