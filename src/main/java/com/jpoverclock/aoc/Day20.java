@@ -1,5 +1,7 @@
 package com.jpoverclock.aoc;
 
+import com.jpoverclock.util.Math;
+
 import java.math.BigInteger;
 import java.util.*;
 
@@ -178,11 +180,23 @@ public class Day20 {
             module.consolidate(moduleMap);
         }
 
+        // `dn` is the only input to `rx`, a conjunction module
+        // `dn` contains 4 inputs: `dd`, `fh`, `xp` and `fc`
+        // `dn` pulses high whenever any of its inputs pulses `low`
+        // So the result is LCM of whenever its inputs pulse low
+
+        long ddPulsedLow = Long.MAX_VALUE;
+        long fhPulsedLow = Long.MAX_VALUE;
+        long xpPulsedLow = Long.MAX_VALUE;
+        long fcPulsedLow = Long.MAX_VALUE;
+
         for (long i = 0;; i++) {
 
-            if (i % 100000 == 0) {
-                System.out.println(i);
-            }
+            if (ddPulsedLow != Long.MAX_VALUE &&
+                    fcPulsedLow != Long.MAX_VALUE &&
+                    xpPulsedLow != Long.MAX_VALUE &&
+                    fhPulsedLow != Long.MAX_VALUE
+            ) break;
 
             List<PulseAction> actions = new ArrayList<>(moduleMap.get("broadcaster").pulse("button", Pulse.LOW));
 
@@ -191,8 +205,15 @@ public class Day20 {
                 for (int j = 0; j < actionsToProcess; j++) {
                     PulseAction action = actions.remove(0);
 
-                    if (action.destination.equals("rx") && action.pulse.equals(Pulse.LOW)) {
-                        return Long.toString(i + 1);
+                    switch (action.destination) {
+                        case "dd" ->
+                                ddPulsedLow = action.pulse.equals(Pulse.LOW) ? i + 1 : ddPulsedLow;
+                        case "fh" ->
+                                fhPulsedLow = action.pulse.equals(Pulse.LOW) ? i + 1 : fhPulsedLow;
+                        case "xp" ->
+                                xpPulsedLow = action.pulse.equals(Pulse.LOW) ? i + 1 : xpPulsedLow;
+                        case "fc" ->
+                                fcPulsedLow = action.pulse.equals(Pulse.LOW) ? i + 1 : fcPulsedLow;
                     }
 
                     Module module = moduleMap.get(action.destination);
@@ -203,5 +224,10 @@ public class Day20 {
                 }
             }
         }
+
+        Stack<Long> values = new Stack<>();
+        values.addAll(List.of(fcPulsedLow, fhPulsedLow, xpPulsedLow, ddPulsedLow));
+
+        return Long.toString(Math.lcm(values));
     }
 }

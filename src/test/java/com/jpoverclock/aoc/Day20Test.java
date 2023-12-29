@@ -95,6 +95,6 @@ class Day20Test {
 
     @Test
     void part2() {
-        assertEquals("?", Day20.part2(MY_INPUT));
+        assertEquals("247454898168563", Day20.part2(MY_INPUT));
     }
 }
